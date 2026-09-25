@@ -1,26 +1,3 @@
-"""Image preprocessing for the embedder — full-frame by default.
-
-open_clip's `preprocess_val` is Resize(short side -> 224) + CenterCrop(224).
-On a 1920x1080 ROV framegrab that throws away the outer ~22% of the width
-before the model sees anything, so an animal near the left or right edge is
-simply absent from the embedding, and painting there in the visualizer weights
-pixels that do not exist.
-
-`pad` keeps the whole frame: letterbox onto a square canvas, then resize. The
-bars are black, which for deep-sea imagery is the same near-black as the water
-already filling the frame's corners, so they add no structure for the model to
-latch onto.
-
-Cost of the change, stated plainly: a 16:9 frame's content lands on 224x126 of
-the 224x224 grid instead of a 224x224 crop, so subjects are ~1.8x smaller in
-pixels and roughly 44% of patches are bar. For small-bodied taxa that is a real
-resolution loss; `crop` is kept so the two can be compared, and MODE is the one
-place that decides.
-
-Whatever this returns must be used for BOTH the dataset and the query — mixing
-modes silently compares vectors from two different views of the world.
-"""
-
 from PIL import Image
 
 MODE = "pad"          # "pad" (full frame) or "crop" (open_clip default)

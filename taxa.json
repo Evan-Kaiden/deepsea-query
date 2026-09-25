@@ -1,0 +1,86 @@
+{
+    "benthic_opaque": [
+        "Strongylocentrotus fragilis",
+        "Psolus squamatus",
+        "Rathbunaster californicus",
+        "Heterochone calyx",
+        "Chionoecetes tanneri"
+    ],
+    "gelatinous_midwater": [
+        "Solmissus",
+        "Atolla",
+        "Praya dubia",
+        "Nanomia bijuga",
+        "Bathochordaeus"
+    ],
+    "small_bodied": [
+        "Tomopteris",
+        "Poeobius meseres"
+    ],
+    "similar_congeners": [
+        "Sebastolobus",
+        "Sebastes",
+        "Merluccius productus"
+    ],
+    "cephalopods": [
+        "Vampyroteuthis infernalis",
+        "Dosidicus gigas",
+        "Chiroteuthis calyx",
+        "Octopus rubescens",
+        "Graneledone boreopacifica"
+    ],
+    "demersal_fish": [
+        "Anoplopoma fimbria",
+        "Microstomus pacificus",
+        "Eptatretus"
+    ],
+    "crustaceans": [
+        "Pandalus platyceros",
+        "Munidopsis",
+        "Euphausiacea"
+    ],
+    "structure_forming": [
+        "Isidella tentaculum",
+        "Keratoisis",
+        "Funiculina",
+        "Metridium farcimen",
+        "Actiniaria",
+        "Corallimorphus pilatus"
+    ],
+    "echinoderms": [
+        "Florometra serratissima",
+        "Scotoplanes globosa",
+        "Peniagone",
+        "Elpidia",
+        "Ophiuroidea",
+        "Asteroidea"
+    ],
+    "sponges": [
+        "Farrea",
+        "Staurocalyptus"
+    ],
+    "ctenophores": [
+        "Beroe",
+        "Lampocteis cruentiventer"
+    ],
+    "medusae": [
+        "Aegina citrea",
+        "Poralia",
+        "Benthocodon",
+        "Periphylla periphylla"
+    ],
+    "pelagic_tunicates": [
+        "Pyrosoma",
+        "Salpida",
+        "Bathochordaeus mcnutti"
+    ],
+    "other_pelagic": [
+        "Chaetognatha",
+        "Physonectae",
+        "Mysida"
+    ],
+    "molluscs_worms": [
+        "Gastropoda",
+        "Holothuroidea"
+    ]
+}

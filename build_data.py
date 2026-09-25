@@ -1,30 +1,7 @@
-"""Build a balanced full-frame image dataset from FathomNet for embedding/clustering.
-
-Sampling choices that matter downstream:
-  * Balanced per-taxon cap. Raw counts span 110 -> 23,061 across the taxa below,
-    and HDBSCAN is density-based, so unbalanced input would let one taxon
-    dominate the density landscape regardless of embedding quality.
-  * MBARI-only imagery. FathomNet is dominated by shallow reef/fisheries surveys
-    (Lutjanus campechanus alone has 198k boxes); without this filter the dataset
-    is not deep-sea.
-  * Dive-stratified sampling. Taking the first N hits for a concept pulls long
-    runs of consecutive framegrabs from a handful of ROV dives, so the "diversity"
-    is mostly the same animal in the same water a few seconds apart. Frames are
-    instead drawn round-robin across dives, and spread in time within a dive.
-  * Mixed scenes are preferred, not filtered out. Within a dive, frames carrying
-    several annotated concepts are taken first, so the set is not all
-    single-subject portraits. Every frame's full concept list is written to the
-    manifest (`all_concepts`), so single- vs multi-taxon frames stay separable.
-  * Images are saved whole, uncropped. Every frame's pixel dimensions are
-    recorded so resolution stays checkable as a per-taxon confound.
-
-Re-running is incremental: frames already on disk are not re-downloaded, and the
-manifest is rebuilt from everything present.
-"""
-
 import argparse
 import csv
 import io
+import json
 import random
 import re
 from collections import defaultdict
@@ -36,96 +13,6 @@ from PIL import Image
 
 from fathomnet.api import images
 from fathomnet.dto import GeoImageConstraints
-
-# Grouped by the failure axis each taxon is meant to probe. Every concept below
-# has >=100 MBARI frames spread over >=10 dives (checked against the API).
-TAXA = {
-    "benthic_opaque": [
-        "Strongylocentrotus fragilis",
-        "Psolus squamatus",
-        "Rathbunaster californicus",
-        "Heterochone calyx",
-        "Chionoecetes tanneri",
-    ],
-    "gelatinous_midwater": [
-        "Solmissus",
-        "Atolla",
-        "Praya dubia",
-        "Nanomia bijuga",
-        "Bathochordaeus",
-    ],
-    "small_bodied": [
-        "Tomopteris",
-        "Poeobius meseres",
-    ],
-    "similar_congeners": [
-        "Sebastolobus",
-        "Sebastes",
-        "Merluccius productus",
-    ],
-    # --- added axes -------------------------------------------------------
-    "cephalopods": [                 # soft-bodied, high pose variance
-        "Vampyroteuthis infernalis",
-        "Dosidicus gigas",
-        "Chiroteuthis calyx",
-        "Octopus rubescens",
-        "Graneledone boreopacifica",
-    ],
-    "demersal_fish": [               # fish on/near the seafloor, cluttered scenes
-        "Anoplopoma fimbria",
-        "Microstomus pacificus",
-        "Eptatretus",
-    ],
-    "crustaceans": [
-        "Pandalus platyceros",
-        "Munidopsis",
-        "Euphausiacea",
-    ],
-    "structure_forming": [           # corals, pens, anemones: community backdrops
-        "Isidella tentaculum",
-        "Keratoisis",
-        "Funiculina",
-        "Metridium farcimen",
-        "Actiniaria",
-        "Corallimorphus pilatus",
-    ],
-    "echinoderms": [
-        "Florometra serratissima",
-        "Scotoplanes globosa",
-        "Peniagone",
-        "Elpidia",
-        "Ophiuroidea",
-        "Asteroidea",
-    ],
-    "sponges": [                     # near-static, texture-dominated frames
-        "Farrea",
-        "Staurocalyptus",
-    ],
-    "ctenophores": [
-        "Beroe",
-        "Lampocteis cruentiventer",
-    ],
-    "medusae": [                     # congeners of the gelatinous axis above
-        "Aegina citrea",
-        "Poralia",
-        "Benthocodon",
-        "Periphylla periphylla",
-    ],
-    "pelagic_tunicates": [
-        "Pyrosoma",
-        "Salpida",
-        "Bathochordaeus mcnutti",
-    ],
-    "other_pelagic": [
-        "Chaetognatha",
-        "Physonectae",
-        "Mysida",
-    ],
-    "molluscs_worms": [
-        "Gastropoda",
-        "Holothuroidea",
-    ],
-}
 
 PER_TAXON = 140          # ~50 taxa * 140 ~= 7000 images
 SEARCH_LIMIT = 1000      # images to scan per taxon before capping
@@ -183,7 +70,7 @@ def collect(concept, per_taxon=PER_TAXON, seen=None):
 
     random.Random(SEED).shuffle(queues)
 
-    # Round-robin across dives: one frame from each before any dive's second.
+    # Across dives one frame from each before any dive's second.
     picked = []
     for rank in range(max((len(q) for q in queues), default=0)):
         for q in queues:
@@ -227,8 +114,23 @@ def fetch(img_dto, concept, session):
     }
 
 
+def load_taxa(path):
+    """Read an {axis: [concept, ...]} mapping from a JSON config file."""
+    with open(path) as fh:
+        taxa = json.load(fh)
+    if not isinstance(taxa, dict) or not all(
+        isinstance(v, list) and all(isinstance(c, str) for c in v)
+        for v in taxa.values()
+    ):
+        raise SystemExit(f"{path}: expected {{axis: [concept, ...]}}")
+    return taxa
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--config", required=True, help="JSON file of {axis: [concept, ...]}"
+    )
     ap.add_argument("--per-taxon", type=int, default=PER_TAXON)
     ap.add_argument("--axis", action="append", help="only build these axes")
     args = ap.parse_args()
@@ -237,7 +139,8 @@ def main():
     rows, seen = [], set()
     session = requests.Session()
 
-    axes = {k: v for k, v in TAXA.items() if not args.axis or k in args.axis}
+    taxa = load_taxa(args.config)
+    axes = {k: v for k, v in taxa.items() if not args.axis or k in args.axis}
     for axis, concepts in axes.items():
         for concept in concepts:
             picked = collect(concept, args.per_taxon, seen)

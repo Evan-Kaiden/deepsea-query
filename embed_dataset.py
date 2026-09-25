@@ -1,11 +1,3 @@
-"""Embed every dataset image to a sibling .pt vector.
-
-Preprocessing comes from preprocess.build() rather than open_clip's
-preprocess_val, so the whole frame is embedded (see preprocess.py). The mode
-used is stamped in dataset/.embed_mode: switching it invalidates every stored
-vector, so they are all recomputed rather than silently mixed.
-"""
-
 from pathlib import Path
 
 import open_clip
