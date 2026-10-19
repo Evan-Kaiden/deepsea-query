@@ -8,7 +8,7 @@ Search deep-sea ROV imagery using an image, a text description, or both. Images 
 Requires Python 3.10+.
 
 ```bash
-pip install torch torchvision open_clip_torch fathomnet requests pillow numpy
+pip install torch torchvision open_clip_torch fathomnet requests pillow numpy duckdb
 ```
 
 The GUI uses `tkinter`, which ships with most Python installs. If you use Homebrew Python on macOS and `import tkinter` fails, run `brew install python-tk`.
