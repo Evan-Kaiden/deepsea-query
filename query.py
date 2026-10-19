@@ -1,13 +1,13 @@
 import torch
 import torch.nn.functional as F
 
-from data_types import vector
-
 
 class Query:
-    def __init__(self, embedder):
+    def __init__(self, embedder, store):
         self.embedder = embedder
-    def query(self, num_return:int, data_refs:list[vector], image=None, text=None, attn_mask=None):
+        self.store = store
+    def query(self, num_return: int, image=None, text=None, attn_mask=None, **filters):
+
         if image is None and text is None:
             raise ValueError
 
@@ -30,28 +30,9 @@ class Query:
         elif got_image:
             embedding = img_embedding
 
-        # make this batched at some point
-        sim_scores = []
-        ref_ids = []
-        for vector in data_refs:
-            id = vector.id
-            ref_embedding = F.normalize(vector.vector, dim=0)
-
-            sim = F.cosine_similarity(ref_embedding, embedding, dim=0)
-
-            sim_scores.append(sim)
-            ref_ids.append(id)
-
-        # sort
-        sim_scores = torch.stack(sim_scores, dim=0) # (N,)
-        sim_scores, indices =  torch.sort(sim_scores, descending=True)
-
-        indices = indices[:num_return].tolist()
-        sim_scores = sim_scores[:num_return]
-        return [ref_ids[idx] for idx in indices], sim_scores
-
-
-            
+        embedding = F.normalize(embedding, dim=0)
+        rows = self.store.search(embedding.cpu(), num_return, **filters)
+        return [r[0] for r in rows], [r[2] for r in rows]
 
 
 

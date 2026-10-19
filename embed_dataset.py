@@ -2,13 +2,15 @@ from pathlib import Path
 
 import open_clip
 import torch
+import torch.nn.functional as F
 from PIL import Image
 
 import preprocess
 from embedder import Embedder
+from store import DATASET_DIR, Store
 
-DATASET_DIR = Path("dataset")
-MODE_MARKER = DATASET_DIR / ".embed_mode"
+LEGACY_MARKER = DATASET_DIR / ".embed_mode"  # mode of the old per-image .pt files
+BATCH = 256
 
 
 def pick_device():
@@ -18,45 +20,48 @@ def pick_device():
         return "cuda"
     return "cpu"
 
-
-def main():
-    if MODE_MARKER.exists():
-        previous = MODE_MARKER.read_text().strip()
-    else:
-        # vectors predating the marker came from open_clip's Resize+CenterCrop
-        previous = "crop" if any(DATASET_DIR.glob("*/*.pt")) else None
-
-    stale = previous is not None and previous != preprocess.MODE
-    if stale:
-        print(
-            f"preprocessing changed ({previous} -> {preprocess.MODE}); "
-            "recomputing every vector"
-        )
-
+def load_embedder():
     model, _, preprocess_val = open_clip.create_model_and_transforms(
         "hf-hub:imageomics/bioclip"
     )
     tokenizer = open_clip.get_tokenizer("hf-hub:imageomics/bioclip")
-    embedder = Embedder(
+    return Embedder(
         model, preprocess.build(preprocess_val), tokenizer, device=pick_device()
     )
 
-    done = skipped = 0
-    for class_dir in sorted(d for d in DATASET_DIR.iterdir() if d.is_dir()):
-        for img_path in sorted(class_dir.glob("*.png")):
-            vec_path = img_path.with_suffix(".pt")
-            if vec_path.exists() and not stale:
-                skipped += 1
-                continue
 
-            enc = embedder.embed_image(Image.open(img_path))
-            torch.save(enc.cpu(), vec_path)
+
+def main():
+    store = Store()
+    store.sync()
+    todo = store.pending(preprocess.MODE)
+
+    # vectors from the old .pt layout are reused if they match the current mode;
+    # ones predating the marker came from open_clip's Resize+CenterCrop
+    legacy_mode = LEGACY_MARKER.read_text().strip() if LEGACY_MARKER.exists() else "crop"
+    reuse_legacy = legacy_mode == preprocess.MODE
+
+    embedder = None
+    done = reused = 0
+    batch = []
+    for path in todo:
+        pt = Path(path).with_suffix(".pt")
+        if reuse_legacy and pt.exists():
+            vec = torch.load(pt, weights_only=False)
+            reused += 1
+        else:
+            if embedder is None:  # skip the model load when nothing needs embedding
+                embedder = load_embedder()
+            vec = embedder.embed_image(Image.open(path))
             done += 1
+        batch.append((path, F.normalize(vec.float().cpu(), dim=0)))
+        if len(batch) == BATCH:
+            store.put(batch, preprocess.MODE)
+            batch = []
+            print(f"{done + reused:6d} / {len(todo)}")
+    store.put(batch, preprocess.MODE)
 
-        print(f"{class_dir.name:32s} {done:6d} embedded  {skipped:6d} cached")
-
-    MODE_MARKER.write_text(preprocess.MODE + "\n")
-    print(f"\n{done} embedded, {skipped} reused, mode={preprocess.MODE}")
+    print(f"\n{done} embedded, {reused} imported from .pt, mode={preprocess.MODE}")
 
 
 if __name__ == "__main__":
